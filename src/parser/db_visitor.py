@@ -106,6 +106,8 @@ class DBVisitor(Visitor):
         schema = {}
         point_cols = {}       # logico → (col_x, col_y)
         indexes_to_create = []
+        pk_col = None
+        pk_index_type = "bplus"
 
         for col in node.columns:
             if col.data_type.upper() == "POINT":
@@ -127,19 +129,37 @@ class DBVisitor(Visitor):
                 db_type = _map_type(col.data_type)
                 schema[col.name] = db_type
 
-                if col.index:
+                if col.is_primary_key:
+                    # PRIMARY KEY explicito
+                    pk_col = col.name
+                    if col.index:
+                        idx_type = INDEX_MAP.get(col.index.upper(), col.index.lower())
+                        pk_index_type = idx_type
+                    # Sin INDEX → default bplus
+                elif col.index:
                     idx_type = INDEX_MAP.get(col.index.upper(), col.index.lower())
-                    indexes_to_create.append({
-                        "column": col.name,
-                        "type": idx_type,
-                        "unique": False,
-                    })
+                    if idx_type == "sequential" and pk_col is None:
+                        # Backward compat: INDEX SEQUENTIAL sin PRIMARY KEY → PK clustered
+                        pk_col = col.name
+                        pk_index_type = "sequential"
+                    else:
+                        indexes_to_create.append({
+                            "column": col.name,
+                            "type": idx_type,
+                            "unique": False,
+                        })
 
-        db = DataBase(node.name, schema=schema)
+        # Detectar PK: la primera columna si no hay PK explicita
+        if pk_col is None:
+            first_col = list(schema.keys())[0]
+            pk_col = first_col
+
+        db = DataBase(node.name, schema=schema, primary_key=pk_col,
+                      pk_index_type=pk_index_type)
         db.point_columns = point_cols
         db._save_schema()
 
-        # Crear indices
+        # Crear indices secundarios
         for idx_info in indexes_to_create:
             db.create_index(idx_info["column"], index_type=idx_info["type"],
                             unique=idx_info["unique"])
@@ -147,7 +167,9 @@ class DBVisitor(Visitor):
         self.tables[node.name] = db
 
         col_info = ", ".join(
-            f"{c.name} {c.data_type}" + (f" INDEX {c.index}" if c.index else "")
+            f"{c.name} {c.data_type}"
+            + (" PRIMARY KEY" if c.is_primary_key else "")
+            + (f" INDEX {c.index}" if c.index else "")
             for c in node.columns
         )
         print(f"Tabla '{node.name}' creada ({col_info})")

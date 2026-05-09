@@ -1,1 +1,7 @@
 CREATE TABLE Estudiantes (id INT INDEX BTREE, nombre VARCHAR, nota FLOAT) FROM FILE "data/alumnos.csv";
+SELECT * FROM Estudiantes WHERE id = 105;
+SELECT * FROM Estudiantes WHERE id > 105;
+CREATE TABLE Locales (id INT, ubicacion POINT INDEX RTREE) FROM FILE "data/puntos_interes.csv";
+SELECT * FROM Locales WHERE ubicacion IN (POINT(-12.04, -77.02), RADIUS 500);
+CREATE TABLE Usuarios (user_id INT INDEX HASH, username VARCHAR);
+SELECT * FROM Estudiantes WHERE nota BETWEEN 11 AND 20;

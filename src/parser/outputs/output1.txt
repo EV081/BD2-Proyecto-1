@@ -1,11 +1,21 @@
 === STDOUT ===
-Codigo:
-CREATE TABLE Estudiantes (id INT INDEX BTREE, nombre VARCHAR, nota FLOAT) FROM FILE "data/alumnos.csv"
+Traza:
+[SQL]  CREATE TABLE Estudiantes (id INT INDEX BTREE, nombre VARCHAR, nota FLOAT) FROM FILE "data/alumnos.csv"
+[EXEC] Crear tabla 'Estudiantes' con columnas [id:INT[BTREE], nombre:VARCHAR, nota:FLOAT], cargando desde 'data/alumnos.csv'
+[SQL]  SELECT * FROM Estudiantes WHERE id = 105
+[EXEC] Buscar en 'Estudiantes' con condicion [id = 105] -> columnas [*]
+[SQL]  SELECT * FROM Estudiantes WHERE id > 105
+[EXEC] Buscar en 'Estudiantes' con condicion [id > 105] -> columnas [*]
+[SQL]  CREATE TABLE Locales (id INT, ubicacion POINT INDEX RTREE) FROM FILE "data/puntos_interes.csv"
+[EXEC] Crear tabla 'Locales' con columnas [id:INT, ubicacion:POINT[RTREE]], cargando desde 'data/puntos_interes.csv'
+[SQL]  SELECT * FROM Locales WHERE ubicacion IN (POINT(-12.04, -77.02), RADIUS 500.0)
+[EXEC] Buscar en 'Locales' con condicion [ubicacion IN POINT(-12.04, -77.02) RADIUS 500.0] -> columnas [*]
+[SQL]  CREATE TABLE Usuarios (user_id INT INDEX HASH, username VARCHAR)
+[EXEC] Crear tabla 'Usuarios' con columnas [user_id:INT[HASH], username:VARCHAR]
+[SQL]  SELECT * FROM Estudiantes WHERE nota BETWEEN 11 AND 20
+[EXEC] Buscar en 'Estudiantes' con condicion [nota BETWEEN 11 AND 20] -> columnas [*]
 
 Ejecucion:
-Crear tabla 'Estudiantes' con columnas [id:INT[BTREE], nombre:VARCHAR, nota:FLOAT], cargando desde 'data/alumnos.csv'
-
-Parser exitoso
-AST guardado en: outputs/ast_1.json
+Ejecucion no exitosa: ValueError: Ya existe un indice sobre 'id'.
 
 === STDERR ===

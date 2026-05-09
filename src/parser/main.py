@@ -4,7 +4,7 @@ import json
 
 from .scanner import *
 from .parser import Parser, ParserError
-from .visitor import PrintVisitor
+from .visitor import TraceVisitor
 from .db_visitor import DBVisitor
 from src.api.dbengine import execute_sql
 
@@ -118,11 +118,11 @@ def execute_parser(scanner, input_path, output_dir=None, persist_ast=True):
     try:
         ast_nodes = parser.parse_program()
 
-        # --- PrintVisitor: reconstruye y muestra el SQL (Codigo) ---
-        print("Codigo:")
-        printer = PrintVisitor()
+        # --- TraceVisitor: muestra SQL + descripcion (debug/traza) ---
+        print("Traza:")
+        tracer = TraceVisitor()
         for node in ast_nodes:
-            node.accept(printer)
+            node.accept(tracer)
 
         # --- DBVisitor: ejecuta realmente contra el motor de BD ---
         print("\nEjecucion:")

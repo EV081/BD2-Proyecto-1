@@ -489,6 +489,294 @@ def test_drop_persists():
 
 
 # ================================================================== #
+#  TEST 15: Sequential File clustered — insert + select basico        #
+# ================================================================== #
+
+def test_clustered_basic():
+    header("TEST 15: Sequential clustered — insert + select basico")
+    cleanup()
+
+    schema = {"id": "int", "edad": "int", "salario": "float"}
+    db = DataBase("emp_seq", schema=schema, primary_key="id",
+                  pk_index_type="sequential")
+
+    check("uses_clustered_seq = True", db.uses_clustered_seq)
+    check("no existe HeapFile", not os.path.exists("data/emp_seq.bin"))
+
+    db.insert({"id": 3, "edad": 25, "salario": 3000.0})
+    db.insert({"id": 1, "edad": 30, "salario": 4500.0})
+    db.insert({"id": 2, "edad": 25, "salario": 3200.0})
+
+    all_recs = db.select_all()
+    check("select_all retorna 3", len(all_recs) == 3, f"got {len(all_recs)}")
+
+    r = db.select("id", 2)
+    check("select(id=2) retorna 1", len(r) == 1, f"got {len(r)}")
+    check("valores correctos", r[0] == (2, 25, 3200.0), f"got {r[0]}")
+
+    cleanup()
+
+
+# ================================================================== #
+#  TEST 16: Sequential clustered + indice secundario B+ Tree          #
+# ================================================================== #
+
+def test_clustered_with_secondary():
+    header("TEST 16: Sequential clustered + indice secundario")
+    cleanup()
+
+    schema = {"id": "int", "edad": "int", "salario": "float"}
+    db = DataBase("emp_sec", schema=schema, primary_key="id",
+                  pk_index_type="sequential")
+    db.create_index("edad", index_type="bplus", unique=False)
+
+    for i in range(20):
+        db.insert({"id": i, "edad": i % 5, "salario": float(i * 100)})
+
+    check("select_all = 20", len(db.select_all()) == 20)
+
+    # Busqueda por PK (usa clustered directo)
+    r = db.select("id", 10)
+    check("select(id=10)", len(r) == 1 and r[0][0] == 10)
+
+    # Busqueda por indice secundario
+    r = db.select("edad", 3)
+    check("select(edad=3) = 4 registros", len(r) == 4, f"got {len(r)}")
+
+    # Range search en PK
+    r = db.select_range("id", 5, 9)
+    check("range(id 5..9) = 5", len(r) == 5, f"got {len(r)}")
+
+    cleanup()
+
+
+# ================================================================== #
+#  TEST 17: Sequential clustered — delete                             #
+# ================================================================== #
+
+def test_clustered_delete():
+    header("TEST 17: Sequential clustered — delete")
+    cleanup()
+
+    schema = {"id": "int", "edad": "int"}
+    db = DataBase("del_seq", schema=schema, primary_key="id",
+                  pk_index_type="sequential")
+    db.create_index("edad", index_type="bplus", unique=False)
+
+    db.insert({"id": 1, "edad": 25})
+    db.insert({"id": 2, "edad": 30})
+    db.insert({"id": 3, "edad": 25})
+
+    # Delete por PK
+    d = db.delete("id", 2)
+    check("delete(id=2) retorna 1", d == 1, f"got {d}")
+    check("select(id=2) vacio", len(db.select("id", 2)) == 0)
+    check("select_all = 2", len(db.select_all()) == 2)
+    check("select(edad=25) = 2", len(db.select("edad", 25)) == 2)
+    check("select(edad=30) = 0", len(db.select("edad", 30)) == 0)
+
+    # Delete por indice secundario
+    d = db.delete("edad", 25)
+    check("delete(edad=25) = 2", d == 2, f"got {d}")
+    check("select_all = 0", len(db.select_all()) == 0)
+
+    cleanup()
+
+
+# ================================================================== #
+#  TEST 18: Sequential clustered — persistencia                       #
+# ================================================================== #
+
+def test_clustered_persistence():
+    header("TEST 18: Sequential clustered — persistencia")
+    cleanup()
+
+    schema = {"id": "int", "nombre": "char(20)"}
+    db = DataBase("persist_seq", schema=schema, primary_key="id",
+                  pk_index_type="sequential")
+    db.insert({"id": 1, "nombre": "Alice"})
+    db.insert({"id": 2, "nombre": "Bob"})
+
+    # Recargar desde disco
+    db2 = DataBase("persist_seq")
+    check("recarga uses_clustered_seq", db2.uses_clustered_seq)
+    check("recarga pk_index_type=sequential", db2.pk_index_type == "sequential")
+
+    all_recs = db2.select_all()
+    check("recarga select_all = 2", len(all_recs) == 2, f"got {len(all_recs)}")
+
+    r = db2.select("id", 1)
+    check("recarga select(id=1)", len(r) == 1)
+    check("recarga nombre=Alice", r[0][1] == "Alice", f"got {r[0][1]}")
+
+    cleanup()
+
+
+# ================================================================== #
+#  TEST 19: Sequential clustered — reconstruccion + indices sec.      #
+# ================================================================== #
+
+def test_clustered_reconstruction():
+    header("TEST 19: Sequential clustered — reconstruccion")
+    cleanup()
+
+    schema = {"id": "int", "edad": "int"}
+    db = DataBase("recon_seq", schema=schema, primary_key="id",
+                  pk_index_type="sequential")
+    db.create_index("edad", index_type="bplus", unique=False)
+
+    # Obtener max_aux para saber cuantos insertar para triggear reconstruct
+    max_aux = db.pm.max_aux
+
+    # Insertar mas que max_aux para forzar reconstruccion
+    n = max_aux + 5
+    for i in range(n):
+        db.insert({"id": i, "edad": i % 3})
+
+    check(f"select_all = {n}", len(db.select_all()) == n)
+
+    # Verificar que el indice secundario sigue funcionando post-reconstruccion
+    count_0 = len([i for i in range(n) if i % 3 == 0])
+    r = db.select("edad", 0)
+    check(f"select(edad=0) = {count_0} post-reconstruct",
+          len(r) == count_0, f"got {len(r)}")
+
+    # Range search en PK post-reconstruct
+    r = db.select_range("id", 0, 9)
+    check("range(id 0..9) = 10", len(r) == 10, f"got {len(r)}")
+
+    cleanup()
+
+
+# ================================================================== #
+#  TEST 20: Sequential clustered — I/O metrics                        #
+# ================================================================== #
+
+def test_clustered_metrics():
+    header("TEST 20: Sequential clustered — I/O metrics")
+    cleanup()
+
+    schema = {"id": "int", "edad": "int"}
+    db = DataBase("met_seq", schema=schema, primary_key="id",
+                  pk_index_type="sequential")
+
+    for i in range(10):
+        db.insert({"id": i, "edad": i * 10})
+
+    r, m = db.select("id", 5, metrics=True)
+    check("search retorna resultado", len(r) == 1)
+    check("metrics tiene time_ms", "time_ms" in m)
+    check("metrics heap_reads > 0", m["heap_reads"] > 0)
+
+    cleanup()
+
+
+# ================================================================== #
+#  TEST 21: Soft delete — RIDs estables sin rebuild                   #
+# ================================================================== #
+
+def test_soft_delete_stable_rids():
+    header("TEST 21: Soft delete — RIDs estables sin rebuild")
+    cleanup()
+
+    schema = {"id": "int", "edad": "int", "score": "int"}
+    db = DataBase("softdel", schema=schema, primary_key="id",
+                  pk_index_type="sequential")
+    db.create_index("edad", index_type="bplus", unique=False)
+    db.create_index("score", index_type="bplus", unique=False)
+
+    # Insertar 10 registros
+    for i in range(10):
+        db.insert({"id": i, "edad": 20 + (i % 3), "score": i * 10})
+
+    check("select_all = 10", len(db.select_all()) == 10)
+
+    # Verificar que num_deleted empieza en 0
+    check("num_deleted = 0", db.pm.num_deleted == 0)
+
+    # Delete por PK — soft delete, no rebuild
+    db.delete("id", 5)
+    check("num_deleted = 1 post-delete PK", db.pm.num_deleted == 1)
+    check("select(id=5) vacio", len(db.select("id", 5)) == 0)
+    check("select_all = 9", len(db.select_all()) == 9)
+
+    # Indices secundarios siguen funcionando
+    r = db.select("edad", 22)
+    expected_22 = len([i for i in range(10) if i != 5 and (20 + i % 3) == 22])
+    check(f"select(edad=22) = {expected_22}", len(r) == expected_22, f"got {len(r)}")
+
+    # Delete por indice secundario
+    db.delete("edad", 20)
+    expected_del_20 = len([i for i in range(10) if i != 5 and (20 + i % 3) == 20])
+    check(f"delete(edad=20) eliminados", db.pm.num_deleted == 1 + expected_del_20)
+    check("select(edad=20) = 0", len(db.select("edad", 20)) == 0)
+
+    # El otro indice secundario (score) sigue valido
+    r = db.select("score", 30)
+    # id=3 tiene score=30, edad=20+0=20 → fue eliminado
+    check("select(score=30) = 0 (id=3 eliminado con edad=20)", len(r) == 0)
+    r = db.select("score", 40)
+    # id=4 tiene score=40, edad=20+1=21 → sigue activo
+    check("select(score=40) = 1", len(r) == 1, f"got {len(r)}")
+
+    # Insert post-delete
+    db.insert({"id": 100, "edad": 99, "score": 999})
+    check("select(id=100)", len(db.select("id", 100)) == 1)
+    check("select(edad=99)", len(db.select("edad", 99)) == 1)
+
+    # Range search post-delete
+    r = db.select_range("id", 0, 9)
+    remaining = len([i for i in range(10) if i != 5 and (20 + i % 3) != 20])
+    check(f"range(id 0..9) = {remaining}", len(r) == remaining, f"got {len(r)}")
+
+    cleanup()
+
+
+# ================================================================== #
+#  TEST 22: Soft delete — compaction during reconstruction            #
+# ================================================================== #
+
+def test_soft_delete_compaction():
+    header("TEST 22: Soft delete — compaction via reconstruction")
+    cleanup()
+
+    schema = {"id": "int", "val": "int"}
+    db = DataBase("compact", schema=schema, primary_key="id",
+                  pk_index_type="sequential")
+    db.create_index("val", index_type="bplus", unique=False)
+
+    max_aux = db.pm.max_aux
+
+    # Insertar registros base
+    for i in range(20):
+        db.insert({"id": i, "val": i % 5})
+
+    # Soft-delete algunos
+    db.delete("id", 3)
+    db.delete("id", 7)
+    db.delete("id", 11)
+    check("num_deleted = 3", db.pm.num_deleted == 3)
+    check("select_all = 17", len(db.select_all()) == 17)
+
+    # Trigger reconstruction insertando hasta max_aux
+    for i in range(20, 20 + max_aux + 1):
+        db.insert({"id": i, "val": i % 5})
+
+    # After reconstruction, deleted entries are compacted
+    check("num_deleted = 0 post-reconstruct", db.pm.num_deleted == 0)
+
+    total = 20 - 3 + max_aux + 1
+    check(f"select_all = {total}", len(db.select_all()) == total,
+          f"got {len(db.select_all())}")
+
+    # Secondary index still works post-reconstruction
+    r = db.select("val", 0)
+    check("select(val=0) > 0 post-reconstruct", len(r) > 0)
+
+    cleanup()
+
+
+# ================================================================== #
 #  MAIN                                                               #
 # ================================================================== #
 
@@ -512,6 +800,14 @@ if __name__ == "__main__":
     test_schema_format()
     test_persistence()
     test_drop_persists()
+    test_clustered_basic()
+    test_clustered_with_secondary()
+    test_clustered_delete()
+    test_clustered_persistence()
+    test_clustered_reconstruction()
+    test_clustered_metrics()
+    test_soft_delete_stable_rids()
+    test_soft_delete_compaction()
 
     print()
     print("=" * 65)

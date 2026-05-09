@@ -32,7 +32,7 @@ docker-compose up --build          # API at http://localhost:8000
 
 ### Run Tests
 ```bash
-python tests/test_dbengine.py        # DB engine integration tests (65 tests)
+python tests/test_dbengine.py        # DB engine integration tests (110 tests)
 python tests/test_bplus.py           # B+ Tree unit tests (38 tests)
 python tests/test_rtree.py           # R-Tree unit tests (34 tests)
 python tests/test_concurrency.py     # Concurrency/lock tests (31 tests)
@@ -60,7 +60,7 @@ src/
 │   └── external_sort.py # Two-pass multiway merge sort (TPMMS)
 ├── indexes/        # Index data structures (all disk-backed)
 │   ├── bplus.py        # B+ Tree (ordered, range queries, linked leaves)
-│   ├── sequentialfile.py # Sequential File with sorted main + overflow
+│   ├── sequentialfile.py # Sequential File: clustered (PK) or secondary index
 │   ├── Extendible_Hashing.py # Dynamic hashing with expandable directory
 │   └── rtree.py        # R-Tree for 2D spatial queries (radius, k-NN)
 ├── parser/         # SQL grammar and parser
@@ -68,7 +68,7 @@ src/
 │   ├── scanner.py      # Lexical analysis (tokenizer)
 │   ├── ast_nodes.py    # AST node class definitions
 │   ├── parser.py       # Recursive descent parser
-│   ├── visitor.py      # Abstract visitor + PrintVisitor
+│   ├── visitor.py      # Abstract visitor + TraceVisitor (debug/traza)
 │   ├── db_visitor.py   # Concrete visitor for DB execution
 │   └── main.py         # Parser entry point
 └── concurrency/    # Transaction simulation and locks
@@ -103,33 +103,52 @@ All imports use `src.` prefix for absolute imports:
 
 6. **Concurrency** (`src/concurrency/`): PageLockManager with shared/exclusive locks, wait-for graph deadlock detection, ConcurrentBPlusTree, Transaction class with strict 2PL.
 
+### Storage Modes: Clustered Sequential vs HeapFile
+
+The system supports two storage modes determined by `pk_index_type`:
+
+**Clustered Sequential (pk_index_type="sequential")**:
+- The SequentialFile stores FULL RECORDS sorted by the primary key
+- No HeapFile is created — the SF IS the table storage
+- Secondary indexes (B+, Hash, RTree) point to (page, slot) in the SF
+- After reconstruction or delete, secondary indexes are rebuilt automatically
+- `DataBase("t", schema, primary_key="id", pk_index_type="sequential")`
+
+**HeapFile (pk_index_type="bplus", default)**:
+- HeapFile stores records unordered
+- ALL indexes (including PK) are secondary, storing (key, RID) pointing to HeapFile
+- `DataBase("t", schema, primary_key="id")` — default B+ Tree on PK
+
+SQL convention: `INDEX SEQUENTIAL` on a column makes it the clustered PK.
+
 ### File Layout on Disk (Runtime)
-- `data/*.bin` — Heap pages (table data)
-- `indexes/*.idx` — Index pages
+- `data/*.bin` — Heap pages (only when NOT using clustered sequential)
+- `indexes/*.idx` — Index pages (and clustered data when using sequential PK)
 - `schemas/*.json` — Table schema metadata
 
 ### Data Types
 - INT (4B), FLOAT (8B), VARCHAR(N) (N bytes), POINT (two FLOATs, spatial)
 
 ### Index Types
-- `"bplus"` — B+ Tree (equality + range)
-- `"sequential"` — Sequential paged file
-- `"hash"` — Extendible Hashing (equality only)
-- `"rtree"` — R-Tree (spatial, requires POINT column)
+- `"bplus"` — B+ Tree, non-clustered (equality + range)
+- `"sequential"` — Sequential File, clustered for PK (records sorted by key)
+- `"hash"` — Extendible Hashing, non-clustered (equality only)
+- `"rtree"` — R-Tree, non-clustered (spatial, requires POINT column)
 
 ## Key Design Decisions
 
 - All structures use fixed 4096-byte pages for fair I/O comparison
-- Records use soft delete (deleted flag) with RID (page, slot) remaining valid
 - PageManager tracks `disk_reads`/`disk_writes` for benchmarking
 - B+ Tree leaves are linked for efficient range traversal
-- Sequential File reconstructs (merges aux into main) when overflow exceeds threshold
+- Sequential File reconstructs (merges aux into main) when overflow exceeds threshold; triggers secondary index rebuild via `on_reconstruct` callback
+- HeapFile uses soft delete (deleted flag) with stable RID slots
+- SequentialFile clustered mode uses soft delete (flag byte per slot), keeping RIDs stable. Secondary indexes are updated individually on delete, not rebuilt. Deleted entries are compacted during reconstruction.
 - No JOINs, aggregates, UPDATE, or query optimizer—scope is single-table operations
 
 ## SQL Dialect
 
 ```sql
-CREATE TABLE t (col1 INT INDEX BTREE, col2 VARCHAR(50), ...) [FROM FILE 'path.csv']
+CREATE TABLE t (col1 INT INDEX SEQUENTIAL, col2 VARCHAR(50) INDEX BTREE, ...) [FROM FILE 'path.csv']
 SELECT * FROM t WHERE col = val | col BETWEEN a AND b | col IN (POINT(x,y), RADIUS r | K k)
 INSERT INTO t VALUES (v1, v2, ...)
 DELETE FROM t WHERE col = val
