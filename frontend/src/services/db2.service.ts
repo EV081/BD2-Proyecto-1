@@ -108,21 +108,21 @@ export async function refreshDb2Catalog(): Promise<Db2Table[]> {
 }
 
 export async function getCsvFiles(): Promise<string[]> {
-  const response = await fetchJson<Db2CsvFilesEndpointResponse>("/api/csv/data");
+  const response = await fetchJson<Db2CsvFilesEndpointResponse>("/api/csv/files");
   return response.csv_files;
 }
 
 export async function uploadCsvFile(file: File): Promise<Db2CsvUploadResponse> {
   const formData = new FormData();
   formData.append("file", file, file.name);
-  return fetchCsvAction<Db2CsvUploadResponse>("/api/csv/data", {
+  return fetchCsvAction<Db2CsvUploadResponse>("/api/csv/files", {
     method: "POST",
     body: formData,
   });
 }
 
 export async function deleteCsvFile(filename: string): Promise<Db2CsvDeleteResponse> {
-  return fetchCsvAction<Db2CsvDeleteResponse>(`/api/csv/data/${encodeURIComponent(filename)}`, {
+  return fetchCsvAction<Db2CsvDeleteResponse>(`/api/csv/files/${encodeURIComponent(filename)}`, {
     method: "DELETE",
   });
 }
