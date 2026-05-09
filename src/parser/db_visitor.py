@@ -103,6 +103,7 @@ class DBVisitor(Visitor):
     # ================================================================ #
 
     def visit_create_table(self, node: CreateTableStmt):
+        t0 = time.perf_counter()
         schema = {}
         point_cols = {}       # logico → (col_x, col_y)
         indexes_to_create = []
@@ -178,7 +179,12 @@ class DBVisitor(Visitor):
         if node.file_path:
             self._load_from_file(db, node)
 
-        return db
+        elapsed = (time.perf_counter() - t0) * 1000
+        m = db._collect_metrics(elapsed)
+        self.last_metrics = m
+        self._print_metrics(m)
+
+        return {"metrics": m}
 
     def _load_from_file(self, db, node):
         """Carga datos desde un archivo CSV ubicado en uploaded_files/."""
@@ -198,9 +204,6 @@ class DBVisitor(Visitor):
         col_names = self._col_names(db)
         point_cols = db.point_columns
         count = 0
-
-        db._reset_all_stats()
-        t0 = time.perf_counter()
 
         with open(file_path, "r", encoding="utf-8") as f:
             # Auto-detectar delimitador leyendo la primera línea
@@ -238,11 +241,7 @@ class DBVisitor(Visitor):
                         record[col] = val
                 db.insert(record)
                 count += 1
-
-        elapsed = (time.perf_counter() - t0) * 1000
-        m = db._collect_metrics(elapsed)
         print(f"  {count} registros cargados desde '{node.file_path}'")
-        self._print_metrics(m)
 
     # ================================================================ #
     #  SELECT                                                           #
