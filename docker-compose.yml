@@ -10,6 +10,12 @@ services:
       - api-indexes:/app/indexes
       - api-schemas:/app/schemas
       - api-uploads:/app/uploaded_files
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     restart: unless-stopped
 
   frontend:
@@ -21,7 +27,8 @@ services:
     environment:
       - API_URL=http://api:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

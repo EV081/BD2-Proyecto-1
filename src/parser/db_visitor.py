@@ -203,7 +203,11 @@ class DBVisitor(Visitor):
         t0 = time.perf_counter()
 
         with open(file_path, "r", encoding="utf-8") as f:
-            reader = csv.reader(f, delimiter=';')
+            # Auto-detectar delimitador leyendo la primera línea
+            sample = f.readline()
+            f.seek(0)
+            delimiter = ';' if ';' in sample else ','
+            reader = csv.reader(f, delimiter=delimiter)
 
             # Detectar header
             first_row = next(reader, None)
