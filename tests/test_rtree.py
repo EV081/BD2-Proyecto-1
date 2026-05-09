@@ -13,7 +13,7 @@ import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.indexes.rtree import RTree
+from src.structures.rtree import RTree
 
 
 PASSED = 0

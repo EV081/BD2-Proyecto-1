@@ -7,10 +7,10 @@ import time
 
 from src.storage.heapfile import HeapFile
 from src.storage.schema import SchemaManager
-from src.indexes.bplus import BPlusTree
-from src.indexes.rtree import RTree
-from src.indexes.sequentialfile import SequentialFile
-from src.indexes.Extendible_Hashing import ExtendibleHash
+from src.structures.bplus import BPlusTree
+from src.structures.rtree import RTree
+from src.structures.sequentialfile import SequentialFile
+from src.structures.Extendible_Hashing import ExtendibleHash
 
 
 class DataBase:
@@ -209,7 +209,7 @@ class DataBase:
         values = list(rec)
         for i, col in enumerate(self.schema):
             if self.schema[col].startswith("char") and isinstance(values[i], bytes):
-                values[i] = values[i].rstrip(b"\x00").decode("utf-8")
+                values[i] = values[i].rstrip(b"\x00").decode("utf-8", errors="replace")
         return tuple(values)
 
     # ================================================================ #

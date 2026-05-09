@@ -58,7 +58,7 @@ src/
 │   ├── heapfile.py     # Record serialization, soft delete, free slots
 │   ├── schema.py       # JSON schema metadata persistence
 │   └── external_sort.py # Two-pass multiway merge sort (TPMMS)
-├── indexes/        # Index data structures (all disk-backed)
+├── structures/     # Index data structures (all disk-backed)
 │   ├── bplus.py        # B+ Tree (ordered, range queries, linked leaves)
 │   ├── sequentialfile.py # Sequential File: clustered (PK) or secondary index
 │   ├── Extendible_Hashing.py # Dynamic hashing with expandable directory
@@ -85,7 +85,7 @@ main.py             # FastAPI REST API entry point
 
 All imports use `src.` prefix for absolute imports:
 - `from src.storage.pagemanager import PageManager`
-- `from src.indexes.bplus import BPlusTree`
+- `from src.structures.bplus import BPlusTree`
 - `from src.api.dbengine import DataBase`
 - Parser internal modules use relative imports (e.g., `from .scanner import *`)
 
@@ -99,7 +99,7 @@ All imports use `src.` prefix for absolute imports:
 
 4. **Storage** (`src/storage/`): PageManager for low-level 4096B page I/O, HeapFile for record serialization with soft delete, SchemaManager for JSON metadata, ExternalSort for TPMMS.
 
-5. **Indexes** (`src/indexes/`): B+ Tree, Sequential File, Extendible Hashing, R-Tree. All use PageManager for disk-backed pages.
+5. **Structures** (`src/structures/`): B+ Tree, Sequential File, Extendible Hashing, R-Tree. All use PageManager for disk-backed pages.
 
 6. **Concurrency** (`src/concurrency/`): PageLockManager with shared/exclusive locks, wait-for graph deadlock detection, ConcurrentBPlusTree, Transaction class with strict 2PL.
 

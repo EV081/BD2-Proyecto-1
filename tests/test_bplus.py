@@ -11,7 +11,7 @@ import shutil
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.indexes.bplus import BPlusTree
+from src.structures.bplus import BPlusTree
 
 
 PASSED = 0

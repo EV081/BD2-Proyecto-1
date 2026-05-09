@@ -2,7 +2,7 @@ import threading
 import time
 from enum import Enum
 
-from src.indexes.bplus import BPlusTree
+from src.structures.bplus import BPlusTree
 from src.storage.pagemanager import PageManager
 
 
