@@ -17,6 +17,7 @@ const SpatialMap = dynamic(
   }
 );
 import type { SpatialQueryContext } from "@src/components/spatial-map";
+import { CsvFileManager } from "@src/components/csv-file-manager";
 
 import { parseDb2Program } from "@src/lib/db2/grammar";
 import {
@@ -514,6 +515,8 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
               </button>
             );
           })}
+
+          {!sidebarCollapsed ? <CsvFileManager /> : null}
         </div>
       </aside>
 

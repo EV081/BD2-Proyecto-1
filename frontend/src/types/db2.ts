@@ -139,6 +139,19 @@ export interface Db2TablesEndpointResponse {
   tables: Db2Table[];
 }
 
+export interface Db2CsvFilesEndpointResponse {
+  csv_files: string[];
+}
+
+export interface Db2CsvUploadResponse {
+  message: string;
+  filename: string;
+}
+
+export interface Db2CsvDeleteResponse {
+  message: string;
+}
+
 export interface Db2ExecuteQueryRequest {
   query: string;
 }

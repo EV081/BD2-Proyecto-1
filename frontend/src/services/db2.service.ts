@@ -1,4 +1,7 @@
 import type {
+  Db2CsvDeleteResponse,
+  Db2CsvFilesEndpointResponse,
+  Db2CsvUploadResponse,
   Db2ExecuteQueryResponse,
   Db2QueryOutcome,
   Db2Row,
@@ -23,6 +26,24 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     const message = typeof payload === "object" && payload && "detail" in payload
       ? String((payload as { detail?: { message?: string } }).detail?.message ?? "DB2 request failed.")
       : "DB2 request failed.";
+    throw new Error(message);
+  }
+
+  return payload as T;
+}
+
+async function fetchCsvAction<T>(url: string, init: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    cache: "no-store",
+  });
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message = typeof payload === "object" && payload && "detail" in payload
+      ? String((payload as { detail?: { message?: string } }).detail?.message ?? "CSV request failed.")
+      : "CSV request failed.";
     throw new Error(message);
   }
 
@@ -84,6 +105,26 @@ export async function getInitialCatalog(): Promise<Db2Table[]> {
 
 export async function refreshDb2Catalog(): Promise<Db2Table[]> {
   return getInitialCatalog();
+}
+
+export async function getCsvFiles(): Promise<string[]> {
+  const response = await fetchJson<Db2CsvFilesEndpointResponse>("/api/csv/data");
+  return response.csv_files;
+}
+
+export async function uploadCsvFile(file: File): Promise<Db2CsvUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+  return fetchCsvAction<Db2CsvUploadResponse>("/api/csv/data", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function deleteCsvFile(filename: string): Promise<Db2CsvDeleteResponse> {
+  return fetchCsvAction<Db2CsvDeleteResponse>(`/api/csv/data/${encodeURIComponent(filename)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function runDb2Query(query: string): Promise<Db2QueryOutcome> {
